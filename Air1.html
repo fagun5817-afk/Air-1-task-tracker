@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Study Tracker 4K Ultra + Report</title>
+<style>
+body{
+  margin:0;
+  font-family:Arial,sans-serif;
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  color:white;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.container{
+  padding:20px;
+  max-width:700px;
+  margin:auto;
+}
+h1{
+  text-align:center;
+  color:#22c55e;
+  margin-bottom:20px;
+  font-size:2em;
+}
+.department{
+  background: rgba(30,41,59,0.95);
+  padding:15px;
+  margin-bottom:15px;
+  border-radius:12px;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.6);
+}
+.department h2{
+  text-align:center;
+  color:#22c55e;
+  margin-bottom:10px;
+  font-size:1.3em;
+}
+.task{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px;
+  margin:5px 0;
+  border-radius:10px;
+  background:#3f1d1d;
+  word-wrap:break-word;
+  overflow-wrap:break-word;
+  flex-wrap:wrap;
+  font-size:1em;
+}
+.task span{flex:1;white-space:normal;}
+.done{background:#064e3b;}
+.pending{background:#3f1d1d;}
+input,button{
+  width:100%;
+  padding:10px;
+  margin:6px 0;
+  font-size:1em;
+  border-radius:8px;
+  border:none;
+}
+button{
+  background:#22c55e;
+  color:white;
+  font-weight:bold;
+  cursor:pointer;
+}
+.deleteBtn{
+  width:22px;
+  height:22px;
+  background:#ef4444;
+  color:white;
+  font-weight:bold;
+  border-radius:50%;
+  border:none;
+  cursor:pointer;
+  font-size:14px;
+  line-height:18px;
+  text-align:center;
+  padding:0;
+}
+.canvas-container{
+  text-align:center;
+  margin-bottom:10px;
+}
+canvas{
+  display:block;
+  margin:0 auto;
+  max-width:100%;
+}
+.info{
+  text-align:center;
+  font-size:1em;
+  color:#facc15;
+  margin:4px 0;
+}
+.streak{
+  text-align:center;
+  font-size:1.2em;
+  color:#facc15;
+  margin:5px 0;
+}
+.report{
+  background:#1e293b;
+  padding:12px;
+  border-radius:12px;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.6);
+  margin-top:10px;
+}
+.report h3{text-align:center;color:#22c55e;margin-bottom:8px;}
+.report ul{list-style:none;padding:0;font-size:0.95em;}
+.report li{margin:3px 0;background:rgba(34,197,94,0.2);padding:5px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,0.3);}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🔥 STUDY TRACKER 4K ULTRA + REPORT</h1>
+
+<div class="department" id="todoDept">
+  <h2>To-Do List</h2>
+  <input id="taskInput" placeholder="Add task">
+  <button id="addBtn">➕ Add Task</button>
+  <div id="taskList"></div>
+  <div class="streak" id="streak">🔥 Streak: 0</div>
+</div>
+
+<div class="department" id="dailyDept">
+  <h2>Daily Progress</h2>
+  <div class="canvas-container">
+    <canvas id="dailyChart"></canvas>
+    <div class="info" id="dailyInfo">Daily: 0 / 0</div>
+  </div>
+</div>
+
+<div class="department" id="weeklyDept">
+  <h2>Weekly Progress</h2>
+  <div class="canvas-container">
+    <canvas id="weeklyChart"></canvas>
+    <div class="info" id="weeklyInfo">Weekly: 0 / 0</div>
+  </div>
+</div>
+
+<div class="department report" id="dailyReport">
+  <h3>✅ Daily Report</h3>
+  <ul id="reportList"></ul>
+</div>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+
+let data = JSON.parse(localStorage.getItem("trackerData")) || {tasks:[],streak:0,lastDate:"",history:[]};
+
+function today(){ return new Date().toDateString(); }
+function save(){ localStorage.setItem("trackerData",JSON.stringify(data)); }
+
+function resetDailyIfNew(){
+  const todayStr = today();
+  if(data.lastDate!==todayStr){
+    data.lastDate=todayStr;
+    data.tasks.forEach(t=>t.done=false);
+    save();
+  }
+}
+
+const taskInput = document.getElementById("taskInput");
+const addBtn = document.getElementById("addBtn");
+const taskList = document.getElementById("taskList");
+
+addBtn.addEventListener("click",(e)=>{
+  e.preventDefault();
+  const t=taskInput.value.trim();
+  if(!t) return;
+  data.tasks.push({text:t,done:false});
+  taskInput.value="";
+  save(); render();
+});
+
+taskInput.addEventListener("keypress",(e)=>{
+  if(e.key==="Enter"){ addBtn.click(); }
+});
+
+function toggleTask(i){
+  data.tasks[i].done=!data.tasks[i].done;
+  if(data.tasks[i].done){
+    const now=new Date();
+    data.history.push({task:data.tasks[i].text,date:now.toDateString(),time:now.toLocaleTimeString()});
+  }
+  save(); render();
+}
+
+function deleteTask(i){
+  data.tasks.splice(i,1);
+  save(); render();
+}
+
+function drawDonut4K(id, doneCount, total){
+  const canvas=document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = 200*dpr;
+  canvas.height = 200*dpr;
+  canvas.style.width="200px";
+  canvas.style.height="200px";
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,200,200);
+
+  const start=-0.5*Math.PI;
+  const radius=80;
+  const lineWidth=18;
+
+  const doneAngle = total?(doneCount/total)*2*Math.PI:0;
+  ctx.beginPath();
+  ctx.arc(100,100,radius,start,start+doneAngle);
+  ctx.strokeStyle="#22c55e";
+  ctx.lineWidth=lineWidth;
+  ctx.lineCap="round";
+  ctx.shadowBlur=10;
+  ctx.shadowColor="#22c55e";
+  ctx.stroke();
+  ctx.shadowBlur=0;
+
+  const undoneAngle= total?( (total-doneCount)/total)*2*Math.PI:0;
+  ctx.beginPath();
+  ctx.arc(100,100,radius,start+doneAngle,start+doneAngle+undoneAngle);
+  ctx.strokeStyle="#ef4444";
+  ctx.lineWidth=lineWidth;
+  ctx.lineCap="round";
+  ctx.shadowBlur=10;
+  ctx.shadowColor="#ef4444";
+  ctx.stroke();
+  ctx.shadowBlur=0;
+
+  const gradient = ctx.createRadialGradient(100,100,radius-2,100,100,radius+4);
+  gradient.addColorStop(0,"rgba(255,255,255,0.1)");
+  gradient.addColorStop(1,"rgba(0,0,0,0.6)");
+  ctx.beginPath();
+  ctx.arc(100,100,radius,0,2*Math.PI);
+  ctx.strokeStyle=gradient;
+  ctx.lineWidth=4;
+  ctx.stroke();
+
+  const percent = total?(doneCount/total)*100:0;
+  ctx.fillStyle="white";
+  ctx.font="22px Arial";
+  ctx.textAlign="center";
+  ctx.fillText(Math.round(percent)+"%",100,105);
+}
+
+function updateStreak(done, total){
+  if(total===0) return;
+  const todayStr=today();
+  const streakData = JSON.parse(localStorage.getItem("streakData")) || {lastDate:"",streak:0};
+  if(done===total && streakData.lastDate!==todayStr){
+    streakData.streak++;
+    streakData.lastDate=todayStr;
+  }
+  localStorage.setItem("streakData",JSON.stringify(streakData));
+  document.getElementById("streak").innerText="🔥 Streak: "+streakData.streak;
+}
+
+function render(){
+  resetDailyIfNew();
+  taskList.innerHTML="";
+  let done=0;
+  data.tasks.forEach((t,i)=>{
+    if(t.done) done++;
+    const div=document.createElement("div");
+    div.className="task "+(t.done?"done":"pending");
+
+    const cb=document.createElement("input");
+    cb.type="checkbox";
+    cb.checked=t.done;
+    cb.addEventListener("change",()=>toggleTask(i));
+
+    const span=document.createElement("span");
+    span.textContent=t.text;
+
+    const del=document.createElement("button");
+    del.textContent="×";
+    del.className="deleteBtn";
+    del.addEventListener("click",()=>deleteTask(i));
+
+    div.appendChild(cb);
+    div.appendChild(span);
+    div.appendChild(del);
+    taskList.appendChild(div);
+  });
+
+  const total=data.tasks.length;
+  drawDonut4K("dailyChart",done,total);
+  drawDonut4K("weeklyChart",done*7,total*7);
+
+  document.getElementById("dailyInfo").innerText=`Daily: ${done} / ${total}`;
+  document.getElementById("weeklyInfo").innerText=`Weekly: ${done*7} / ${total*7}`;
+
+  updateStreak(done,total);
+
+  const reportBox=document.getElementById("reportList");
+  reportBox.innerHTML="";
+  data.history.forEach(entry=>{
+    const li=document.createElement("li");
+    li.textContent=`${entry.task} ✅ ${entry.date} ${entry.time}`;
+    reportBox.appendChild(li);
+  });
+}
+
+setInterval(render,60000);
+render();
+
+});
+</script>
+</body>
+</html>
